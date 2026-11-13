@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Terms and Conditions — Spendly{% endblock %}
+
+{% block head %}
+<style>
+    .legal-section { padding: 4rem 1.5rem 5rem; }
+    .legal-inner { max-width: 720px; margin: 0 auto; }
+    .legal-title {
+        font-family: var(--font-display);
+        font-size: 2.5rem;
+        font-weight: 400;
+        color: var(--ink);
+        margin-bottom: 0.5rem;
+    }
+    .legal-updated { color: var(--ink-muted); font-size: 0.9rem; margin-bottom: 2.5rem; }
+    .legal-inner h2 {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-weight: 400;
+        color: var(--ink);
+        margin: 2.25rem 0 0.75rem;
+    }
+    .legal-inner p, .legal-inner li { color: var(--ink-soft); line-height: 1.7; }
+    .legal-inner p { margin-bottom: 1rem; }
+    .legal-inner ul { padding-left: 1.25rem; margin-bottom: 1rem; }
+    .legal-inner li { margin-bottom: 0.4rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<section class="legal-section">
+    <div class="legal-inner">
+        <h1 class="legal-title">Terms and Conditions</h1>
+        <p class="legal-updated">Last updated: November 13, 2026</p>
+
+        <p>
+            These Terms and Conditions govern your use of Spendly, a personal
+            expense tracking service. Please read them carefully before creating
+            an account or using the service.
+        </p>
+
+        <h2>1. Acceptance of Terms</h2>
+        <p>
+            By accessing or using Spendly, you agree to be bound by these Terms.
+            If you do not agree with any part of them, you may not use the service.
+            You must be at least 18 years old, or have the consent of a parent or
+            guardian, to create an account.
+        </p>
+
+        <h2>2. Use of Service</h2>
+        <p>Spendly lets you record, categorise, and review your personal expenses. When using the service, you agree to:</p>
+        <ul>
+            <li>Provide accurate information when registering and keep your login credentials secure.</li>
+            <li>Use the service only for lawful, personal purposes.</li>
+            <li>Not attempt to gain unauthorised access to other accounts, our systems, or our data.</li>
+            <li>Not interfere with or disrupt the operation of the service.</li>
+        </ul>
+        <p>
+            We may suspend or terminate accounts that violate these Terms. Spendly
+            is a record-keeping tool and does not provide financial, tax, or
+            investment advice.
+        </p>
+
+        <h2>3. User Data</h2>
+        <p>
+            You retain ownership of the expense data you enter into Spendly. We
+            store it to provide the service to you and do not sell it to third
+            parties. You are responsible for the accuracy of the data you enter.
+        </p>
+        <p>
+            You may request deletion of your account and associated data at any
+            time. Details on how we collect, use, and protect your information are
+            described in our Privacy Policy.
+        </p>
+
+        <h2>4. Limitations of Liability</h2>
+        <p>
+            Spendly is provided "as is" and "as available", without warranties of
+            any kind, express or implied. We do not guarantee that the service will
+            be uninterrupted, error-free, or that data will never be lost.
+        </p>
+        <p>
+            To the fullest extent permitted by law, Spendly and its operators will
+            not be liable for any indirect, incidental, or consequential damages,
+            including financial decisions made based on information shown in the
+            service, arising from your use of or inability to use Spendly.
+        </p>
+
+        <h2>5. Changes to Terms</h2>
+        <p>
+            We may update these Terms from time to time. When we do, we will revise
+            the "Last updated" date above, and for significant changes we will make
+            reasonable efforts to notify you. Continuing to use Spendly after
+            changes take effect means you accept the revised Terms.
+        </p>
+
+        <h2>6. Contact</h2>
+        <p>
+            If you have questions about these Terms, please contact the Spendly team.
+        </p>
+    </div>
+</section>
+
+{% endblock %}
