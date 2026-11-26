@@ -1,6 +1,8 @@
 import os
 import re
 import sqlite3
+from datetime import date, datetime
+from functools import wraps
 
 from flask import Flask, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -16,6 +18,45 @@ seed_db()
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DUPLICATE_EMAIL_ERROR = "An account with that email already exists."
 INVALID_LOGIN_ERROR = "Invalid email or password."
+
+
+# ------------------------------------------------------------------ #
+# Helpers                                                             #
+# ------------------------------------------------------------------ #
+
+def login_required(view):
+    """Redirect to the login page unless someone is signed in."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def format_inr(amount):
+    """Format an amount as rupees with Indian digit grouping, e.g. 1,23,456.50."""
+    integer, decimals = f"{float(amount):.2f}".split(".")
+    if len(integer) > 3:
+        head, tail = integer[:-3], integer[-3:]
+        groups = []
+        while len(head) > 2:
+            groups.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            groups.insert(0, head)
+        integer = ",".join(groups + [tail])
+    return f"₹{integer}.{decimals}"
+
+
+app.add_template_filter(format_inr, "inr")
+
+
+def _initials(name):
+    parts = name.split()
+    if not parts:
+        return "?"
+    return "".join(part[0] for part in parts[:2]).upper()
 
 
 # ------------------------------------------------------------------ #
@@ -71,7 +112,7 @@ def _login_error(message, email, status):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("user_id"):
-        return redirect(url_for("landing"))
+        return redirect(url_for("profile"))
 
     if request.method == "GET":
         return render_template("login.html")
@@ -96,13 +137,67 @@ def login():
     session.clear()
     session["user_id"] = user["id"]
     session["user_name"] = user["name"]
-    return redirect(url_for("landing"))
+    return redirect(url_for("profile"))
 
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("landing"))
+
+
+@app.route("/profile")
+@login_required
+def profile():
+    user_id = session["user_id"]
+    conn = get_db()
+    try:
+        user = conn.execute(
+            "SELECT name, email, created_at FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if user is None:
+            session.clear()
+            return redirect(url_for("login"))
+
+        totals = conn.execute(
+            "SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total "
+            "FROM expenses WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        month = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) AS total FROM expenses "
+            "WHERE user_id = ? AND date LIKE ?",
+            (user_id, date.today().strftime("%Y-%m") + "-%"),
+        ).fetchone()
+        rows = conn.execute(
+            "SELECT date, category, description, amount FROM expenses "
+            "WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 5",
+            (user_id,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    recent_expenses = [
+        {
+            "display_date": datetime.strptime(row["date"], "%Y-%m-%d").strftime("%d %b %Y"),
+            "category": row["category"],
+            "description": row["description"],
+            "amount": row["amount"],
+        }
+        for row in rows
+    ]
+    member_since = datetime.strptime(user["created_at"][:10], "%Y-%m-%d").strftime("%B %Y")
+
+    return render_template(
+        "profile.html",
+        user=user,
+        initials=_initials(user["name"]),
+        member_since=member_since,
+        total_spent=totals["total"],
+        month_spent=month["total"],
+        expense_count=totals["count"],
+        recent_expenses=recent_expenses,
+    )
 
 
 @app.route("/terms")
@@ -118,11 +213,6 @@ def privacy():
 # ------------------------------------------------------------------ #
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
-
-@app.route("/profile")
-def profile():
-    return "Profile page — coming in Step 4"
-
 
 @app.route("/expenses/add")
 def add_expense():
