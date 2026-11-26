@@ -6,13 +6,6 @@ from werkzeug.security import check_password_hash
 from database import db
 
 
-@pytest.fixture
-def temp_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "test.db"))
-    db.init_db()
-    return db
-
-
 def test_init_creates_tables(temp_db):
     conn = temp_db.get_db()
     names = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
