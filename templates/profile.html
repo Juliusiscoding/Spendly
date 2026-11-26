@@ -7,82 +7,108 @@
 {% endblock %}
 
 {% block content %}
+{% set tones = {"Food": "green", "Bills": "amber", "Shopping": "amber", "Health": "red"} %}
 <section class="pf-section">
     <div class="pf-inner">
 
-        <header class="pf-header">
-            <div class="pf-avatar" aria-hidden="true">{{ initials }}</div>
-            <div>
-                <h1 class="pf-title">{{ user.name }}</h1>
-                <p class="pf-subtitle">Member since {{ member_since }}</p>
-            </div>
+        <header class="pf-page-header">
+            <span class="pf-eyebrow">Your profile</span>
+            <h1 class="pf-title">Welcome back, {{ user.name }}</h1>
         </header>
 
-        <div class="pf-card pf-account">
-            <h2 class="pf-card-title">Account</h2>
-            <dl class="pf-details">
-                <dt>Name</dt>
-                <dd>{{ user.name }}</dd>
-                <dt>Email</dt>
-                <dd>{{ user.email }}</dd>
-            </dl>
-            <a href="{{ url_for('logout') }}" class="btn-ghost">Log out</a>
-        </div>
+        <div class="pf-layout">
 
-        <div class="pf-stats">
-            <div class="pf-stat">
-                <span class="pf-stat-label">Total spent</span>
-                <span class="pf-stat-value">{{ total_spent | inr }}</span>
-            </div>
-            <div class="pf-stat pf-stat--month">
-                <span class="pf-stat-label">This month</span>
-                <span class="pf-stat-value">{{ month_spent | inr }}</span>
-            </div>
-            <div class="pf-stat">
-                <span class="pf-stat-label">Expenses recorded</span>
-                <span class="pf-stat-value">{{ expense_count }}</span>
-            </div>
-        </div>
+            <aside class="pf-card pf-identity">
+                <div class="pf-avatar" aria-hidden="true">{{ initials }}</div>
+                <div class="pf-identity-text">
+                    <h2 class="pf-name">{{ user.name }}</h2>
+                    <p class="pf-email">{{ user.email }}</p>
+                </div>
+                <dl class="pf-details">
+                    <dt><i data-lucide="calendar" aria-hidden="true"></i>Member since</dt>
+                    <dd>{{ member_since }}</dd>
+                </dl>
+                <a href="{{ url_for('logout') }}" class="btn-ghost pf-logout">
+                    <i data-lucide="log-out" aria-hidden="true"></i>Log out
+                </a>
+            </aside>
 
-        <div class="pf-card pf-recent">
-            <div class="pf-recent-header">
-                <h2 class="pf-card-title">Recent expenses</h2>
-                {% if expense_count %}
-                <a href="{{ url_for('add_expense') }}" class="btn-primary">Add expense</a>
-                {% endif %}
-            </div>
+            <div class="pf-main">
 
-            {% if recent_expenses %}
-            <div class="pf-table-wrap">
-                <table class="pf-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Category</th>
-                            <th>Description</th>
-                            <th class="pf-amount">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for expense in recent_expenses %}
-                        <tr>
-                            <td>{{ expense.display_date }}</td>
-                            <td><span class="pf-pill">{{ expense.category }}</span></td>
-                            <td>{{ expense.description or "—" }}</td>
-                            <td class="pf-amount">{{ expense.amount | inr }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="pf-stats">
+                    <div class="pf-stat pf-stat--feature">
+                        <span class="pf-stat-label"><i data-lucide="calendar" aria-hidden="true"></i>This month</span>
+                        <span class="pf-stat-value">{{ month_spent | inr }}</span>
+                    </div>
+                    <div class="pf-stat">
+                        <span class="pf-stat-label"><i data-lucide="wallet" aria-hidden="true"></i>Total spent</span>
+                        <span class="pf-stat-value">{{ total_spent | inr }}</span>
+                    </div>
+                    <div class="pf-stat">
+                        <span class="pf-stat-label"><i data-lucide="receipt" aria-hidden="true"></i>Expenses recorded</span>
+                        <span class="pf-stat-value">{{ expense_count }}</span>
+                    </div>
+                </div>
+
+                <div class="pf-card pf-recent">
+                    <div class="pf-recent-header">
+                        <h2 class="pf-card-title"><i data-lucide="clock" aria-hidden="true"></i>Recent expenses</h2>
+                        {% if recent_expenses %}
+                        <a href="{{ url_for('add_expense') }}" class="btn-primary pf-btn-icon">
+                            <i data-lucide="plus" aria-hidden="true"></i>Add expense
+                        </a>
+                        {% endif %}
+                    </div>
+
+                    {% if recent_expenses %}
+                    <div class="pf-table-wrap">
+                        <table class="pf-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Category</th>
+                                    <th class="pf-col-desc">Description</th>
+                                    <th class="pf-amount">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for expense in recent_expenses %}
+                                <tr>
+                                    <td class="pf-date">{{ expense.display_date }}</td>
+                                    <td><span class="pf-pill pf-pill--{{ tones.get(expense.category, 'neutral') }}">{{ expense.category }}</span></td>
+                                    <td class="pf-col-desc">{{ expense.description or "—" }}</td>
+                                    <td class="pf-amount">{{ expense.amount | inr }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="pf-empty">
+                        <i data-lucide="receipt" aria-hidden="true"></i>
+                        <p class="pf-empty-title">No expenses yet.</p>
+                        <p class="pf-empty-text">Start tracking where your rupees go.</p>
+                        <a href="{{ url_for('add_expense') }}" class="btn-primary pf-btn-icon">
+                            <i data-lucide="plus" aria-hidden="true"></i>Add your first expense
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+
             </div>
-            {% else %}
-            <div class="pf-empty">
-                <p>No expenses yet.</p>
-                <a href="{{ url_for('add_expense') }}" class="btn-primary">Add your first expense</a>
-            </div>
-            {% endif %}
         </div>
 
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/lucide@1.81.0/dist/umd/lucide.min.js"></script>
+<script>
+    (function () {
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    })();
+</script>
 {% endblock %}

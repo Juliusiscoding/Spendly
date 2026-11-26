@@ -1,217 +1,240 @@
-# Spec 04 — Profile page
+# Spec 04 — Profile page design
 
 ## Goal
-Give a signed-in user a real `/profile` page: a header with their name and when they
-joined, their account details, three spending figures in rupees, and their five most
-recent expenses. Signed-out visitors who open it are sent to the login page, and
-logging in now lands on `/profile` instead of the landing page.
+Give a signed-in user a finished, styled `/profile` page: an identity card with their
+initials, name, email and join date, a summary of their spending in rupees with this
+month's figure featured, and their five most recent expenses with colour-coded category
+pills. The page works from a phone up to a desktop and is the place mobile users log
+out from.
 
 ## Scope
-- In scope: a `login_required` decorator, the `/profile` route, `templates/profile.html`
-  and `static/css/profile.css`, an initials avatar, account details (name, email,
-  member since), three summary tiles (total spent, this month, expenses recorded), a
-  read-only table of the five most recent expenses with category pills, an empty state,
-  an `inr` template filter for rupee amounts, a "Log out" button on the page, and
-  changing the login redirects to `/profile`.
+- In scope: `templates/profile.html` and `static/css/profile.css` (both rebuilt from
+  scratch), a two-column layout that collapses to one column, the identity card, three
+  summary tiles, the recent-expenses table with category pills, the empty state, and
+  `tests/test_profile.py` covering both the route and the rendered markup.
+- Already done and not changed here: the `login_required` decorator, `format_inr` /
+  the `inr` filter, `_initials`, the `profile()` route and its queries, and the login
+  redirects to `/profile` (all in `app.py`, commit `5f54728`).
 - Out of scope: editing the name, email or password, deleting the account, profile
-  photos, a `?next=` return URL after login, charts or category breakdowns,  editing or deleting expenses
-  (Steps 7, 8 and 9). Expense rows have no edit or delete links yet.
+  photos, charts or a category breakdown, filtering or paging the expense list, and
+  adding, editing or deleting expenses (Steps 7, 8 and 9). Expense rows have no edit or
+  delete links yet; the "Add expense" buttons lead to the Step 7 placeholder.
 
 ## Files touched
-- `app.py`: a `login_required` decorator, `format_inr` registered as the `inr`
-  template filter, a `_initials(name)` helper, the real `profile()` route (moved into
-  the implemented routes section), and both login redirects changed to `profile`.
 - `templates/profile.html` (new): extends `base.html`, loads `profile.css` in the
-  `head` block.
-- `static/css/profile.css` (new): page styles, every class prefixed `pf-`.
+  `head` block and Lucide icons (pinned `lucide@1.81.0` from unpkg) plus a
+  `lucide.createIcons()` IIFE in the `scripts` block. Lucide is loaded on this page
+  only; `base.html` is unchanged.
+- `static/css/profile.css` (new): every class prefixed `pf-`.
 - `tests/test_profile.py` (new).
-- `tests/test_login.py`: the two tests that expect `Location == "/"` after a login now
-  expect `/profile`. The logout tests are unchanged.
-- No schema changes. `users(id, name, email, created_at)` and
-  `expenses(id, user_id, amount, category, date, description)` already exist.
-- `.claude/specs/03-login-and-logout.md` is not edited; this spec supersedes its
-  redirect target.
+- `app.py`: no changes. The template uses only the variables the route already passes.
+- `static/css/style.css`, `templates/base.html`: no changes.
+- No schema changes.
 
 ## Behaviour
 
-### `login_required` decorator
-1. If `session.get("user_id")` is falsy, `redirect(url_for("login"))`.
-2. Otherwise call the wrapped view with its arguments.
-3. Wrap with `functools.wraps` so the endpoint name stays `profile`.
-4. Only `/profile` uses it in this step. Steps 7–9 will reuse it on the expense routes.
+### `GET /profile` (existing, unchanged)
+For reference, the template receives exactly these variables:
 
-### `GET /profile` (decorated with `@login_required`)
-1. Open one connection with `get_db()` and run all queries inside a single
-   `try/finally`.
-2. Load the user: `SELECT name, email, created_at FROM users WHERE id = ?` with
-   `session["user_id"]`.
-3. If there is no row (the account was deleted while the cookie was still valid),
-   `session.clear()` and `redirect(url_for("login"))`.
-4. Load the totals for this user only:
-   - `SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ?`
-   - `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE user_id = ? AND date LIKE ?`
-     with `date.today().strftime("%Y-%m") + "-%"`.
-5. Load recent expenses:
-   `SELECT date, category, description, amount FROM expenses WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT 5`.
-6. Render `profile.html` with status 200 and these variables:
-   | Variable          | Value                                                        |
-   |-------------------|--------------------------------------------------------------|
-   | `user`            | the `users` row (`name`, `email`)                            |
-   | `initials`        | `_initials(user["name"])`                                    |
-   | `member_since`    | e.g. `"November 2026"`, from `created_at`                    |
-   | `total_spent`     | float, all-time sum                                          |
-   | `month_spent`     | float, sum for the current calendar month                    |
-   | `expense_count`   | int                                                          |
-   | `recent_expenses` | list of dicts: `display_date`, `category`, `description`, `amount` |
+| Variable          | Type / example                                                       |
+|-------------------|----------------------------------------------------------------------|
+| `user`            | row with `name`, `email`                                             |
+| `initials`        | `"AR"` (from `_initials`, `"?"` for a blank name)                    |
+| `member_since`    | `"November 2026"`                                                    |
+| `total_spent`     | float, all-time sum                                                  |
+| `month_spent`     | float, current calendar month                                        |
+| `expense_count`   | int                                                                  |
+| `recent_expenses` | up to 5 dicts: `display_date` (`"05 Nov 2026"`), `category`, `description`, `amount` |
 
-There are no form submissions on this page, so there is no validation table. The only
-error paths are the two redirects to `/login` (signed out, or stale session), both 302.
+Error paths stay as implemented: signed out → 302 to `/login`; session for a deleted
+user → session cleared, 302 to `/login`. There are no forms on this page, so there is
+no validation table.
 
-### Page layout (`profile.html`)
-`{% block title %}Profile · Spendly{% endblock %}`. All content sits in
-`<section class="pf-section"><div class="pf-inner">…</div></section>`, top to bottom:
+### Page structure (`profile.html`)
+`{% block title %}Profile · Spendly{% endblock %}`. Markup, top to bottom:
 
-1. **Header (`.pf-header`)**
-   - `.pf-avatar`: a 64px circle with `initials`, `--accent-light` background,
-     `--accent` text, `--font-display`.
-   - `.pf-title` (`<h1>`, `--font-display`, about 2.25rem): the user's name.
-   - `.pf-subtitle` (`--ink-muted`): "Member since November 2026".
-2. **Account card (`.pf-card .pf-account`)**
-   - Heading "Account" (`.pf-card-title`).
-   - A `<dl>` with two rows: "Name" / name and "Email" / email. Labels in
-     `--ink-muted`, small caps-style uppercase at about 0.75rem.
-   - A "Log out" link styled `btn-ghost`, pointing to `url_for('logout')`. This is the
-     only way to log out on screens under 600px, where `style.css` hides the navbar's
-     non-CTA links.
-3. **Summary tiles (`.pf-stats`)**: three `.pf-stat` cards in a row:
-   | Label (`.pf-stat-label`) | Value (`.pf-stat-value`)        |
-   |--------------------------|---------------------------------|
-   | Total spent              | `total_spent \| inr`            |
-   | This month               | `month_spent \| inr`            |
-   | Expenses recorded        | `expense_count` (plain integer) |
-   Values in `--font-display` at about 1.75rem. The "This month" tile has a
-   `--accent-2` top border (3px) to set it apart; the others use `--border`.
+```
+<section class="pf-section">
+  <div class="pf-inner">
+    <header class="pf-page-header"> eyebrow + heading </header>
+    <div class="pf-layout">
+      <aside class="pf-identity"> … </aside>
+      <div class="pf-main"> stats + recent </div>
+    </div>
+  </div>
+</section>
+```
+
+1. **Page header (`.pf-page-header`)**
+   - `.pf-eyebrow`: "Your profile", styled like the existing `.hero-badge` pill
+     (`--accent-light` background, `--accent` text, uppercase, 0.75rem, `999px` radius).
+   - `<h1 class="pf-title">`: "Welcome back, {{ user.name }}" in `--font-display`,
+     `clamp(1.5rem, 4vw, 2rem)`.
+2. **Identity card (`<aside class="pf-card pf-identity">`)**
+   - `.pf-avatar`: 72px circle showing `initials`, `--accent` background, `--paper`
+     text, `--font-display` 1.5rem, `aria-hidden="true"`.
+   - `.pf-name` (`<h2>`, `--font-display`, 1.25rem): `user.name`.
+   - `.pf-email` (`--ink-muted`, 0.875rem, `overflow-wrap: anywhere` so long addresses
+     don't overflow): `user.email`.
+   - A `--border-soft` divider, then `<dl class="pf-details">` with one row:
+     "Member since" / `member_since`. Labels uppercase 0.75rem `--ink-muted`.
+   - A full-width "Log out" link, class `btn-ghost pf-logout`, to `url_for('logout')`.
+     This is the only log-out control under 600px, where the navbar hides non-CTA links.
+3. **Summary tiles (`.pf-stats`)**: three `.pf-stat` cards, in this order:
+   | Modifier          | Label (`.pf-stat-label`) | Value (`.pf-stat-value`)        |
+   |-------------------|--------------------------|---------------------------------|
+   | `pf-stat--feature`| This month               | `month_spent \| inr`            |
+   | —                 | Total spent              | `total_spent \| inr`            |
+   | —                 | Expenses recorded        | `expense_count` (plain integer) |
+   - Values `--font-display` 1.5rem, `font-variant-numeric: tabular-nums`.
+   - `pf-stat--feature` is inverted: `--ink` background, `--paper` value text,
+     `--ink-faint` label, and a 3px `--accent-2` top border.
 4. **Recent expenses (`.pf-card .pf-recent`)**
-   - `.pf-recent-header`: heading "Recent expenses" on the left and, when
-     `expense_count > 0`, an "Add expense" link styled `btn-primary` pointing to
-     `url_for('add_expense')` on the right. It leads to the Step 7 placeholder for now.
-   - With expenses: `<table class="pf-table">` with columns Date, Category,
-     Description, Amount.
-     - Date: `display_date`, e.g. `05 Nov 2026`.
-     - Category: `<span class="pf-pill">` with `--accent-light` background,
-       `--accent` text, `--radius-sm`.
-     - Description: the text, or `—` when empty or `NULL`.
-     - Amount: `amount | inr`, right-aligned, `font-variant-numeric: tabular-nums`.
-     - Header row in `--ink-muted` uppercase small text; rows separated by
-       `--border-soft`.
-   - Empty state (`expense_count == 0`): instead of the table and the header button,
-     `.pf-empty` shows "No expenses yet." and a `btn-primary` link "Add your first
-     expense" to `url_for('add_expense')`. The tiles still show `₹0.00`, `₹0.00` and `0`.
+   - `.pf-recent-header`: `<h2 class="pf-card-title">Recent expenses</h2>` left; when
+     `recent_expenses` is non-empty, a `btn-primary` "Add expense" link to
+     `url_for('add_expense')` right.
+   - With expenses: `<div class="pf-table-wrap"><table class="pf-table">` with columns
+     Date, Category, Description, Amount (`<th class="pf-amount">`).
+     - Date: `expense.display_date`, `--ink-muted`, `white-space: nowrap`.
+     - Category: `<span class="pf-pill pf-pill--{{ tone }}">{{ expense.category }}</span>`
+       where `tone` comes from a fixed map in the template (see Implementation notes).
+     - Description: the text, or `—` when empty or `None`.
+     - Amount: `expense.amount | inr`, class `pf-amount` (right-aligned, tabular
+       numbers, weight 600).
+     - `<thead>` uppercase 0.75rem `--ink-muted`; rows separated by `--border-soft`;
+       row hover background `--paper`.
+   - Empty state (no `recent_expenses`): instead of the header button and table,
+     `.pf-empty` — a dashed `--border` box, centred, with `<p>` "No expenses yet.",
+     a muted line "Start tracking where your rupees go.", and a `btn-primary` link
+     "Add your first expense" to `url_for('add_expense')`. Tiles still read `₹0.00`,
+     `₹0.00`, `0`.
 
-### Visual rules (`profile.css`)
-- Only `:root` variables from `style.css` for colours, radii and fonts. No new hex
-  values.
-- `.pf-section`: `padding: 3rem 1.5rem 5rem`. `.pf-inner`: `max-width: 960px;
-  margin: 0 auto`, children spaced with `display: grid; gap: 1.5rem`.
-- Cards (`.pf-card`, `.pf-stat`): `--paper-card` background, 1px `--border`,
-  `--radius-md`, `padding: 1.5rem`.
-- `.pf-stats`: `grid-template-columns: repeat(3, 1fr)`.
-- At `max-width: 700px`: `.pf-stats` becomes one column, `.pf-header` stacks the avatar
-  above the text, `.pf-table` is wrapped in `.pf-table-wrap { overflow-x: auto; }` so
-  it scrolls instead of overflowing, and `.pf-recent-header` wraps.
-- No JavaScript on this page; leave the `scripts` block empty.
+### Category pill tones
+| Category                         | Class              | Background / text                 |
+|----------------------------------|--------------------|-----------------------------------|
+| Food                             | `pf-pill--green`   | `--accent-light` / `--accent`     |
+| Bills, Shopping                  | `pf-pill--amber`   | `--accent-2-light` / `--accent-2` |
+| Health                           | `pf-pill--red`     | `--danger-light` / `--danger`     |
+| Anything else (Transport, Entertainment, Other, unknown) | `pf-pill--neutral` | `--paper-warm` / `--ink-soft` |
 
-### Rupee formatting (`inr` filter)
-`format_inr(amount)` returns `₹` plus the amount with two decimals and Indian digit
-grouping (last three digits, then groups of two):
-| Input       | Output            |
-|-------------|-------------------|
-| `0`         | `₹0.00`           |
-| `450`       | `₹450.00`         |
-| `1899`      | `₹1,899.00`       |
-| `123456.5`  | `₹1,23,456.50`    |
-| `10000000`  | `₹1,00,00,000.00` |
-Register with `app.add_template_filter(format_inr, "inr")` so later steps can reuse it.
-Amounts are always positive (the schema has `CHECK (amount > 0)`), so negatives need
-no handling.
+Pills: `--radius-sm`, 0.75rem, weight 500, `padding: 0.25rem 0.75rem`, `white-space: nowrap`.
 
-### Initials (`_initials`)
-- Split the stripped name on whitespace and take the first letter of the first two
-  words, upper-cased: `"Asha Rao"` → `"AR"`, `"demo user"` → `"DU"`, `"Madonna"` → `"M"`.
-- If the name is empty, return `"?"`.
+### Icons (Lucide)
+Each icon is `<i data-lucide="…" aria-hidden="true"></i>` next to a visible text label,
+so the page still reads correctly if the CDN fails. One icon per label, no more:
 
-### Login redirects (changes Step 03 behaviour)
-- A successful `POST /login` redirects to `url_for("profile")`.
-- `GET /login` while signed in redirects to `url_for("profile")`.
-- `/logout` still redirects to `url_for("landing")`.
+| Where                        | Icon        |
+|------------------------------|-------------|
+| "Member since" label         | `calendar`  |
+| Log out button               | `log-out`   |
+| "This month" tile label      | `calendar`  |
+| "Total spent" tile label     | `wallet`    |
+| "Expenses recorded" label    | `receipt`   |
+| "Recent expenses" heading    | `clock`     |
+| Add expense buttons          | `plus`      |
+| Empty state (32px, muted)    | `receipt`   |
+
+Sizes: 16px inline with text, 20px in buttons, 32px in the empty state.
+
+### Layout and responsive rules (`profile.css`)
+- `.pf-section`: `padding: 3rem 2rem 5rem`. `.pf-inner`: `max-width: var(--max-width)`,
+  centred.
+- `.pf-page-header`: `margin-bottom: 2rem`.
+- `.pf-layout`: `display: grid; grid-template-columns: 300px 1fr; gap: 1.5rem;
+  align-items: start`. `.pf-identity` is `position: sticky; top: 88px` (60px navbar +
+  28px).
+- `.pf-main`: `display: grid; gap: 1.5rem`. `.pf-stats`: 3 equal columns, `gap: 1rem`.
+- `.pf-card`, `.pf-stat`: `--paper-card` background, 1px `--border`,
+  `--radius-md`, padding 1.5rem, and a subtle shadow
+  `0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06)` (the only literal colours
+  allowed).
+- Font sizes stay on the scale 0.75 / 0.875 / 1 / 1.25 / 1.5 / 2rem; spacing on the
+  4px grid (0.25, 0.5, 0.75, 1, 1.5, 2, 2.5, 3rem). These follow
+  `.claude/skills/frontend-design/SKILLS.md`.
+- `@media (max-width: 900px)`: `.pf-layout` one column, `.pf-identity` not sticky and
+  laid out as a row (avatar left, text right, log-out button full width below).
+- `@media (max-width: 768px)`: `.pf-table-wrap` `overflow-x: auto`; the Description
+  column (`.pf-col-desc`) is hidden.
+- `@media (max-width: 600px)`: `.pf-section` padding `2rem 1rem 4rem`; `.pf-stats`
+  one column.
 
 ## Implementation notes
-- Imports: `from functools import wraps` and `from datetime import date, datetime`.
-- Every query filters by `user_id = ?` with the id from the session, so one user never
-  sees another's data. Use `?` placeholders only.
-- Do the date formatting in the route, not the template:
-  - `member_since = datetime.strptime(user["created_at"][:10], "%Y-%m-%d").strftime("%B %Y")`.
-    `created_at` is SQLite `CURRENT_TIMESTAMP` (`YYYY-MM-DD HH:MM:SS`, UTC).
-  - `display_date = datetime.strptime(row["date"], "%Y-%m-%d").strftime("%d %b %Y")`.
-    Keep the leading zero (`05 Nov 2026`); `%-d` doesn't work on Windows.
-- `format_inr`: format with `f"{float(amount):.2f}"` first, split into integer and
-  decimal parts, then group the integer part (last three digits, then pairs from the
-  right). Formatting first stops floating-point noise from showing.
-- Jinja autoescapes names, emails and descriptions. Don't use `|safe` anywhere.
-- The navbar's "Hi, <name>" comes from `session["user_name"]`, but the page itself
-  uses the fresh `users` row.
-- Remove the `"Profile page — coming in Step 4"` placeholder and the old undecorated
-  `profile()`; Flask raises an error if two views share an endpoint name.
-- Seed data trap: `seed_db()` dates every demo expense on days 01–12 of the current
-  month, so on the demo account "This month" equals "Total spent" (₹6,247.00, 8
-  expenses). That's expected. Tests don't rely on seed data: `conftest.py` gives each
-  test an empty DB, and the tests insert rows with explicit dates, including one in an
-  earlier month.
-- Test trap: the "this month" test must build its dates from `date.today()`, not
-  hard-coded strings, or it breaks when the month changes. Use a fixed date in an
-  earlier year (e.g. `2020-01-15`) for the "not this month" row.
+- No new Python. Don't add imports, helpers or queries to `app.py`; if the template
+  seems to need a value the route doesn't pass, derive it in Jinja.
+- Tone map in the template, set once before the loop:
+  `{% set tones = {"Food": "green", "Bills": "amber", "Shopping": "amber", "Health": "red"} %}`
+  then `{% set tone = tones.get(expense.category, "neutral") %}`. Never build a class
+  name from the raw category string; it is user data and may contain spaces.
+- Jinja autoescapes `user.name`, `user.email`, `category` and `description`; don't use
+  `|safe` anywhere.
+- Use `{{ expense.description or "—" }}` so both `""` and `None` show the dash.
+- Use the `inr` filter for every money value; never format amounts by hand or
+  hard-code `₹` next to a number.
+- Colours, radii and fonts come only from the `:root` variables in `style.css`. No new
+  hex values (the shadow `rgba` values above are the one exception).
+- Pin Lucide to an exact version (`lucide@1.81.0`), never `@latest`, and guard the call:
+  `(function () { if (window.lucide) { lucide.createIcons(); } })();`.
+- Mark the Description `<th>` and each description `<td>` with `class="pf-col-desc"`
+  for the mobile rule.
+- Seed data trap: the demo account's expenses are all dated in the current month, so
+  "This month" equals "Total spent" there. That is expected. Tests use the empty temp
+  DB from `conftest.py` and insert their own rows, including one outside the month.
+- Trap: with `profile.html` deleted, any request to `/profile` raises
+  `TemplateNotFound` today. Nothing in `tests/test_login.py` renders `/profile` (it
+  only checks redirect `Location`), which is why the suite still passes.
 
 ## Acceptance criteria
-- [ ] Signed out, `GET /profile` returns 302 to `/login`.
-- [ ] Signed in, `GET /profile` returns 200 and shows the user's name, email, initials
-      and "Member since <Month YYYY>".
-- [ ] Total spent, this month and expenses recorded match the user's own rows; another
-      user's expenses are never included.
-- [ ] Amounts use ₹ with two decimals and Indian grouping, e.g. `₹1,23,456.50`.
-- [ ] Recent expenses shows at most five rows, newest date first, with dates like
-      `05 Nov 2026` and `—` for an empty description.
+- [ ] Signed out, `GET /profile` redirects to `/login`; a stale session is cleared and
+      redirected to `/login`.
+- [ ] Signed in, `GET /profile` returns 200 with title "Profile · Spendly" and loads
+      `css/profile.css`.
+- [ ] The identity card shows the initials avatar, name, email and "Member since
+      <Month YYYY>", plus a "Log out" link to `/logout`.
+- [ ] Tiles show This month, Total spent and Expenses recorded, in that order, with
+      ₹ and Indian grouping (e.g. `₹1,23,456.50`); other users' expenses are excluded.
+- [ ] At most five recent expenses, newest first; an empty description shows `—`.
+- [ ] Category pills use the tone map: Food green, Bills/Shopping amber, Health red,
+      anything else neutral.
 - [ ] A user with no expenses sees "No expenses yet.", an "Add your first expense"
-      link, and `₹0.00` totals.
-- [ ] A session whose user no longer exists is cleared and redirected to `/login`.
-- [ ] Logging in redirects to `/profile`, and visiting `/login` while signed in does too.
-- [ ] The page has a "Log out" link to `/logout`.
-- [ ] `profile.css` uses only `:root` variables, and the tiles stack into one column
-      under 700px.
+      link to `/expenses/add`, `₹0.00` totals, and no table.
+- [ ] HTML in a description or name is escaped, not rendered.
+- [ ] Lucide icons render on `/profile`, and Lucide is loaded only on `/profile`.
+- [ ] Every class in `profile.html` and `profile.css` (other than the shared
+      `btn-primary` / `btn-ghost`) starts with `pf-`.
+- [ ] Layout is two columns above 900px, one column below; the table scrolls and hides
+      Description under 768px; the tiles stack under 600px (checked manually).
 - [ ] All existing tests in `tests/` still pass.
 
 ## Tests (`tests/test_profile.py`, pytest + pytest-flask)
-- Fixtures: `conftest.py` provides `temp_db` (autouse, fresh empty DB) and `client`.
-  Add a `user` fixture inserting "Asha Rao" / `asha@example.com` with
-  `generate_password_hash` (as in `test_login.py`), an `other_user` fixture, and an
-  `add_expense(user_id, amount, date, category="Food", description="")` helper that
-  inserts through `temp_db.get_db()`. Sign in by setting `sess["user_id"]` and
-  `sess["user_name"]` inside `client.session_transaction()`.
-- Signed out: `GET /profile` → 302, `Location` ends with `/login`.
-- Signed in: 200; body contains `Asha Rao`, `asha@example.com`, `AR` and
-  `Member since`.
-- Totals: two expenses this month (100 and 250.5) and one on `2020-01-15` (1000);
-  `other_user` has 5000 this month. Body contains `₹1,350.50` (total), `₹350.50`
-  (this month) and the count `3`, and does not contain `₹5,000.00`.
-- Recent list: insert seven expenses on consecutive days with descriptions
-  `exp-1` … `exp-7`. Only `exp-3` … `exp-7` appear, and `exp-7` comes before `exp-3`
-  in the body.
-- Description fallback: an expense with an empty description renders `—`.
-- Empty state: body contains `No expenses yet.` and `₹0.00`, and no `pf-table`.
-- Stale session: set `user_id` to an id with no row → 302 to `/login`, and the session
-  is empty afterwards.
-- Login redirect: `POST /login` with valid credentials → `Location` ends with
-  `/profile`.
-- `format_inr`: parametrized over the five table values, calling the function directly.
-- `_initials`: `"Asha Rao"` → `"AR"`, `"Madonna"` → `"M"`, `""` → `"?"`.
-- In `tests/test_login.py`, update `test_valid_login_sets_session_and_redirects` and
-  `test_signed_in_user_is_redirected_from_login` to expect `/profile`.
+- Fixtures/helpers: `conftest.py` gives a fresh empty DB per test (`temp_db`) and the
+  `client`. Add `_insert_user(temp_db, name, email)` using `generate_password_hash`,
+  `user` ("Asha Rao", `asha@example.com`) and `other_user` fixtures, an
+  `add_expense(temp_db, user_id, amount, day, category="Food", description="")` helper,
+  and `sign_in(client, user_id, name)` that sets `session["user_id"]` and
+  `session["user_name"]` via `client.session_transaction()`.
+- Route behaviour:
+  - Signed out → 302, `Location` ends with `/login`.
+  - Stale session (user id 999) → 302 to `/login` and an empty session.
+  - Signed in → 200, contains `Profile · Spendly`, `css/profile.css`, `Asha Rao`,
+    `asha@example.com`, `>AR<`, `Member since`, and `href="/logout"`.
+- Totals: two expenses today (100, 250.5), one on `2020-01-15` (1000), and one for
+  `other_user` (5000). Response contains `₹350.50`, `₹1,350.50` and `>3<`, and not
+  `₹5,000.00`.
+- Tile order: the index of "This month" in the response is before "Total spent", which
+  is before "Expenses recorded".
+- Recent list: seven expenses with descriptions `e1`…`e7` on consecutive past dates.
+  Only the five newest appear, in newest-first order (compare `resp.data.index(...)`).
+- Pill tones: one Food, one Bills, one Health and one Transport expense → the response
+  contains `pf-pill--green`, `pf-pill--amber`, `pf-pill--red` and `pf-pill--neutral`.
+- Lucide: `/profile` contains `lucide@1.81.0` and `createIcons`; `/` does not contain
+  `lucide`.
+- Empty description renders `—`.
+- Escaping: a description of `<script>alert(1)</script>` appears as
+  `&lt;script&gt;` and the raw tag does not.
+- Empty state: `No expenses yet.`, `Add your first expense`, `href="/expenses/add"`,
+  `₹0.00`, and no `<table`.
+- Indian grouping on the page: one expense of 123456.5 → `₹1,23,456.50` appears.
+- `format_inr` unit tests: `0 → ₹0.00`, `450 → ₹450.00`, `1899 → ₹1,899.00`,
+  `123456.5 → ₹1,23,456.50`, `10000000 → ₹1,00,00,000.00`.
+- `_initials` unit tests: `"Asha Rao" → "AR"`, `"madonna" → "M"`,
+  `"Ana Maria Lopez" → "AM"`, `"" → "?"`.
