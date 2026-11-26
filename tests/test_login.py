@@ -38,7 +38,7 @@ def test_get_renders_form(client):
 def test_valid_login_sets_session_and_redirects(client, user):
     resp = login(client)
     assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/profile")
+    assert resp.headers["Location"] == "/"
 
     sess = session_data(client)
     assert sess["user_id"] == user
@@ -82,7 +82,7 @@ def test_signed_in_user_is_redirected_from_login(client, user):
     login(client)
     resp = client.get("/login")
     assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/profile")
+    assert resp.headers["Location"] == "/"
 
 
 def test_logout_clears_session(client, user):

@@ -31,7 +31,7 @@ someone is signed in.
   or hash never does.
 
 ### `GET /login`
-1. If `session` already has `user_id`, `redirect(url_for("profile"))`.
+1. If `session` already has `user_id`, `redirect(url_for("landing"))`.
 2. Otherwise render `login.html` as it does now.
 
 ### `POST /login`
@@ -50,7 +50,8 @@ someone is signed in.
 5. On success:
    - `session.clear()` first, so no data from an earlier session carries over
    - set `session["user_id"]` and `session["user_name"]`
-   - `redirect(url_for("profile"))` (still the Step 4 placeholder, which is fine)
+   - `redirect(url_for("landing"))`. `/profile` is still a plain-text placeholder until
+     Step 4, so the landing page (which shows the signed-in navbar) is used instead.
 
 ### `GET /logout`
 1. `session.clear()`.
@@ -76,13 +77,13 @@ someone is signed in.
   the 8-character registration minimum, so login must not check password length.
 
 ## Acceptance criteria
-- [ ] Signing in as `demo@spendly.com` / `demo123` redirects to `/profile` and sets
+- [ ] Signing in as `demo@spendly.com` / `demo123` redirects to `/` and sets
       `user_id` and `user_name` in the session.
 - [ ] `DEMO@spendly.com` with surrounding spaces also signs in.
 - [ ] A wrong password and an unknown email both show "Invalid email or password." with 401.
 - [ ] An empty field shows "Email and password are required." with 400.
 - [ ] After a failed login the email field keeps its value and the password field is empty.
-- [ ] Visiting `/login` while signed in redirects to `/profile`.
+- [ ] Visiting `/login` while signed in redirects to `/`.
 - [ ] `/logout` clears the session and redirects to `/`, and works when signed out.
 - [ ] The navbar shows "Hi, <name>" and "Log out" when signed in, and "Sign in" and
       "Get started" when signed out.
@@ -91,12 +92,12 @@ someone is signed in.
 ## Tests (`tests/test_login.py`, pytest + pytest-flask)
 - `conftest.py` already points `DB_PATH` at a fresh temp DB for each test. Create a
   user in each test (or a fixture) by inserting a row with `generate_password_hash`.
-- Happy path: 302 to `/profile`, and `session["user_id"]` matches (check with
+- Happy path: 302 to `/`, and `session["user_id"]` matches (check with
   `with client.session_transaction() as sess:`).
 - Email normalization: mixed case with spaces still signs in.
 - Wrong password and unknown email: 401, the same message, no `user_id` in session.
 - Empty fields: 400 and the required message.
-- Signed-in `GET /login` redirects to `/profile`.
+- Signed-in `GET /login` redirects to `/`.
 - Logout: after signing in, `GET /logout` redirects to `/` and the session is empty.
 - Navbar: after signing in, `GET /` contains "Log out" and the user's name; signed out
   it contains "Sign in".
